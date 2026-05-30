@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>TileTown</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="css/style.css" />
+    </head>
+    <body>
+        <header>
+            <div class="logo">Tile<span>Town</span></div>
+            <div class="header-actions">
+                <button class="btn danger" id="btn-clear">CLEAR</button>
+                <button class="btn primary" id="btn-export">EXPORT SAVE</button>
+                <button class="btn" id="btn-import">IMPORT SAVE</button>
+            </div>
+        </header>
+
+        <div class="main">
+            <div class="sidebar">
+                <div class="info-panel">
+                    <div class="panel-label">Zone Palette</div>
+                    <div class="zone-grid" id="zone-grid"></div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="panel-label">Cursor</div>
+                    <div class="coord-display" id="coord-display">
+                        x: —<br />y: —<br />zone: —
+                    </div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="panel-label">Map Stats</div>
+                    <div class="stats" id="stats-display">
+                        <div class="stat-row">
+                            <span class="k" style="font-size: 10px"
+                                >— paint some tiles —</span
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="canvas-wrap">
+                <canvas id="gameCanvas"></canvas>
+                <div class="canvas-hint">
+                    CLICK OR DRAG TO PAINT &nbsp;·&nbsp; HOLD SHIFT TO ERASE
+                </div>
+            </div>
+        </div>
+
+        <!-- Export modal -->
+        <div class="modal-bg" id="modal-export">
+            <div class="modal">
+                <h3>EXPORT SAVE</h3>
+                <p>
+                    Copy this save code and keep it somewhere safe — a text
+                    file, note, or message. Use "Import Save" to restore your
+                    map in any session.
+                </p>
+                <textarea id="export-text" readonly></textarea>
+                <div class="modal-actions">
+                    <button class="btn primary" id="btn-copy-save">
+                        COPY TO CLIPBOARD
+                    </button>
+                    <button class="btn" id="btn-export-close">CLOSE</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import modal -->
+        <div class="modal-bg" id="modal-import">
+            <div class="modal">
+                <h3>IMPORT SAVE</h3>
+                <p>Paste your save code below to restore a previous map.</p>
+                <textarea
+                    id="import-text"
+                    placeholder="Paste save code here..."
+                ></textarea>
+                <div class="modal-actions">
+                    <button class="btn primary" id="btn-do-import">
+                        LOAD MAP
+                    </button>
+                    <button class="btn" id="btn-import-close">CANCEL</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="toast" id="toast"></div>
+
+        <script src="js/game.js" type="module"></script>
+    </body>
+</html>
