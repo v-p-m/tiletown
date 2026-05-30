@@ -45,13 +45,14 @@ export function commitStroke() {
   if (!activeStroke) return;
 
   // Filter to cells that actually changed
-  const changed = [...activeStroke.after.entries()]
-    .filter(([key, after]) => activeStroke.before.get(key) !== after);
+  const changed = [...activeStroke.after.entries()].filter(
+    ([key, after]) => activeStroke.before.get(key) !== after,
+  );
 
   if (changed.length > 0) {
     const entry = {
       before: new Map(activeStroke.before),
-      after:  new Map(activeStroke.after.entries()),
+      after: new Map(activeStroke.after.entries()),
     };
     undoStack.push(entry);
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
@@ -71,7 +72,7 @@ export function undo(grid) {
   if (!entry) return false;
   redoStack.push(entry);
   entry.before.forEach((zone, key) => {
-    const [gx, gy] = key.split(',').map(Number);
+    const [gx, gy] = key.split(",").map(Number);
     grid[gy][gx] = zone;
   });
   return true;
@@ -87,7 +88,7 @@ export function redo(grid) {
   if (!entry) return false;
   undoStack.push(entry);
   entry.after.forEach((zone, key) => {
-    const [gx, gy] = key.split(',').map(Number);
+    const [gx, gy] = key.split(",").map(Number);
     grid[gy][gx] = zone;
   });
   return true;

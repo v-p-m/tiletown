@@ -1,6 +1,6 @@
 // game.js
 // Main entry point: constants, grid state, camera, undo/redo, UI, game loop.
-
+const GAME_VERSION = "0.0.3";
 // ── Constants (exported for renderer.js and input.js) ────────────────────────
 export const COLS = 28;
 export const ROWS = 28;
@@ -91,6 +91,7 @@ import {
   redo,
   historyState,
 } from "./history.js";
+import { generateTerrain } from "./terrain.js";
 
 // ── Canvas ────────────────────────────────────────────────────────────────────
 const canvas = document.getElementById("gameCanvas");
@@ -147,6 +148,20 @@ function resetCamera() {
   camera.panX = 0;
   camera.panY = 0;
   updateZoomLabel();
+}
+
+// ── Terrain generation ────────────────────────────────────────────────────────
+function generateMap() {
+  const terrain = generateTerrain(COLS, ROWS);
+  beginStroke();
+  for (let gy = 0; gy < ROWS; gy++)
+    for (let gx = 0; gx < COLS; gx++) {
+      recordCell(grid, gx, gy, terrain[gy][gx]);
+      grid[gy][gx] = terrain[gy][gx];
+    }
+  commitStroke();
+  refreshHistoryButtons();
+  showToast("New terrain generated");
 }
 
 function updateZoomLabel() {
@@ -307,8 +322,13 @@ function autosave() {
 function autoload() {
   try {
     const s = localStorage.getItem("tiletown_autosave");
-    if (s) loadFromSave(s);
+    if (s) {
+      loadFromSave(s);
+      return;
+    }
   } catch {}
+  // No save found — generate a fresh map on first open
+  generateMap();
 }
 autoload();
 setInterval(autosave, 5000);
@@ -327,6 +347,8 @@ document
 document
   .getElementById("btn-zoom-reset")
   .addEventListener("click", resetCamera);
+
+document.getElementById("btn-generate").addEventListener("click", generateMap);
 
 document.getElementById("btn-undo").addEventListener("click", () => {
   if (undo(grid)) {
