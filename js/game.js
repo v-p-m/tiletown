@@ -1,12 +1,12 @@
 // game.js
-// Main entry point: constants, grid state, UI wiring, game loop.
-const GAME_VERSION = "0.0.1";
-// ── Constants (exported for use in renderer.js and input.js) ──────────────────
+// Main entry point: constants, grid state, camera, undo/redo, UI, game loop.
+
+// ── Constants (exported for renderer.js and input.js) ────────────────────────
 export const COLS = 28;
 export const ROWS = 28;
-export const TW = 36; // tile width
-export const TH = 18; // tile height
-export const WALL = 8; // side wall height
+export const TW = 36;
+export const TH = 18;
+export const WALL = 8;
 
 export const ZONES = [
   {
@@ -83,47 +83,97 @@ ZONES.forEach((z) => {
 // ── Imports ───────────────────────────────────────────────────────────────────
 import { drawGrid } from "./renderer.js";
 import { attachInput, isValid } from "./input.js";
+import {
+  beginStroke,
+  recordCell,
+  commitStroke,
+  undo,
+  redo,
+  historyState,
+} from "./history.js";
 
-// ── Canvas setup ──────────────────────────────────────────────────────────────
+// ── Canvas ────────────────────────────────────────────────────────────────────
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Reactive dimensions object — renderer and input read from this each frame/event
-const dims = { canvasW: 0, canvasH: 0, offsetX: 0, offsetY: 40 };
+// Camera: zoom and pan in canvas-pixel space
+const camera = { zoom: 1, panX: 0, panY: 0 };
+const ZOOM_MIN = 0.3,
+  ZOOM_MAX = 3,
+  ZOOM_STEP = 0.15;
+
+// dims is passed to input and renderer — they read it reactively
+const dims = { canvasW: 0, canvasH: 0, camera };
 
 function resizeCanvas() {
-  const sidebar = 200;
-  const padding = 32;
-  const maxW = Math.min(window.innerWidth - sidebar - padding, 900);
-  const maxH = Math.min(window.innerHeight - 100, 580);
-  dims.canvasW = Math.max(maxW, 400);
-  dims.canvasH = Math.max(maxH, 300);
-  dims.offsetX = dims.canvasW / 2;
+  const sidebar = 200,
+    padding = 32;
+  dims.canvasW = Math.max(
+    Math.min(window.innerWidth - sidebar - padding, 900),
+    400,
+  );
+  dims.canvasH = Math.max(Math.min(window.innerHeight - 100, 580), 300);
   canvas.width = dims.canvasW;
   canvas.height = dims.canvasH;
 }
-
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 
-// ── Grid state ────────────────────────────────────────────────────────────────
+// ── Grid ──────────────────────────────────────────────────────────────────────
 const grid = Array.from({ length: ROWS }, () => Array(COLS).fill("empty"));
-
 let hovered = null;
 let currentZone = "grass";
 
-// ── Paint helper ──────────────────────────────────────────────────────────────
+// ── Zoom / pan helpers ────────────────────────────────────────────────────────
+function applyZoom(delta, cx, cy) {
+  const newZoom = Math.min(
+    ZOOM_MAX,
+    Math.max(ZOOM_MIN, camera.zoom + delta * ZOOM_STEP),
+  );
+  // Zoom around canvas point (cx, cy)
+  camera.panX = cx - (cx - camera.panX) * (newZoom / camera.zoom);
+  camera.panY = cy - (cy - camera.panY) * (newZoom / camera.zoom);
+  camera.zoom = newZoom;
+  updateZoomLabel();
+}
+
+function applyPan(dx, dy) {
+  camera.panX += dx;
+  camera.panY += dy;
+}
+
+function resetCamera() {
+  camera.zoom = 1;
+  camera.panX = 0;
+  camera.panY = 0;
+  updateZoomLabel();
+}
+
+function updateZoomLabel() {
+  const el = document.getElementById("zoom-label");
+  if (el) el.textContent = Math.round(camera.zoom * 100) + "%";
+  document.getElementById("btn-zoom-in").disabled = camera.zoom >= ZOOM_MAX;
+  document.getElementById("btn-zoom-out").disabled = camera.zoom <= ZOOM_MIN;
+}
+
+// ── Undo/redo UI refresh ──────────────────────────────────────────────────────
+function refreshHistoryButtons() {
+  const { canUndo, canRedo } = historyState();
+  document.getElementById("btn-undo").disabled = !canUndo;
+  document.getElementById("btn-redo").disabled = !canRedo;
+}
+
+// ── Paint ─────────────────────────────────────────────────────────────────────
 function paint(gx, gy, erase) {
   if (!isValid(gx, gy)) return;
-  grid[gy][gx] = erase ? "empty" : currentZone;
+  const newZone = erase ? "empty" : currentZone;
+  recordCell(grid, gx, gy, newZone);
+  grid[gy][gx] = newZone;
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
-attachInput(
-  canvas,
-  dims,
-  // onHover
-  (gx, gy) => {
+attachInput(canvas, dims, {
+  onHover(gx, gy) {
     if (isValid(gx, gy)) {
       hovered = { x: gx, y: gy };
       document.getElementById("coord-display").innerHTML =
@@ -134,19 +184,61 @@ attachInput(
         "x: —<br>y: —<br>zone: —";
     }
   },
-  // onPaint
-  (gx, gy, erase) => paint(gx, gy, erase),
-  // onLeave
-  () => {
+  onPaintStart() {
+    beginStroke();
+  },
+  onPaint(gx, gy, erase) {
+    paint(gx, gy, erase);
+  },
+  onPaintEnd() {
+    commitStroke();
+    refreshHistoryButtons();
+  },
+  onLeave() {
     hovered = null;
     document.getElementById("coord-display").innerHTML =
       "x: —<br>y: —<br>zone: —";
   },
-);
+  onZoom(delta, cx, cy) {
+    applyZoom(delta, cx, cy);
+  },
+  onPanDelta(dx, dy) {
+    applyPan(dx, dy);
+  },
+});
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+window.addEventListener("keydown", (e) => {
+  // Don't fire if user is typing in a textarea
+  if (e.target.tagName === "TEXTAREA") return;
+  if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+    e.preventDefault();
+    if (undo(grid)) {
+      refreshHistoryButtons();
+      showToast("Undo");
+    }
+  }
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    (e.key === "y" || (e.key === "z" && e.shiftKey))
+  ) {
+    e.preventDefault();
+    if (redo(grid)) {
+      refreshHistoryButtons();
+      showToast("Redo");
+    }
+  }
+  if (e.key === "0" && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    resetCamera();
+  }
+  if (e.key === "+" || e.key === "=")
+    applyZoom(1, dims.canvasW / 2, dims.canvasH / 2);
+  if (e.key === "-") applyZoom(-1, dims.canvasW / 2, dims.canvasH / 2);
+});
 
 // ── Zone palette ──────────────────────────────────────────────────────────────
 const zoneGrid = document.getElementById("zone-grid");
-
 ZONES.forEach((z) => {
   const btn = document.createElement("button");
   btn.className = "zone-btn" + (z.id === currentZone ? " active" : "");
@@ -162,7 +254,7 @@ ZONES.forEach((z) => {
   zoneGrid.appendChild(btn);
 });
 
-// ── Stats panel ───────────────────────────────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────────────────────────────
 function updateStats() {
   const counts = {};
   ZONES.forEach((z) => {
@@ -170,7 +262,6 @@ function updateStats() {
   });
   for (let gy = 0; gy < ROWS; gy++)
     for (let gx = 0; gx < COLS; gx++) counts[grid[gy][gx]]++;
-
   const el = document.getElementById("stats-display");
   const rows = ZONES.filter((z) => z.id !== "empty" && counts[z.id] > 0)
     .map(
@@ -197,19 +288,17 @@ function loadFromSave(str) {
     const s = JSON.parse(str);
     if (s.v !== 1) throw new Error("Unknown version");
     const rows = s.data.split("|");
-    for (let gy = 0; gy < Math.min(ROWS, rows.length); gy++) {
+    for (let gy = 0; gy < Math.min(ROWS, rows.length); gy++)
       for (let gx = 0; gx < Math.min(COLS, rows[gy].length); gx++) {
         const idx = parseInt(rows[gy][gx], 16);
         if (ZONES[idx]) grid[gy][gx] = ZONES[idx].id;
       }
-    }
     return true;
   } catch {
     return false;
   }
 }
 
-// Auto-save / auto-load via localStorage
 function autosave() {
   try {
     localStorage.setItem("tiletown_autosave", gridToSave());
@@ -224,22 +313,56 @@ function autoload() {
 autoload();
 setInterval(autosave, 5000);
 
-// ── UI: Clear ─────────────────────────────────────────────────────────────────
+// ── Header buttons ────────────────────────────────────────────────────────────
+document
+  .getElementById("btn-zoom-in")
+  .addEventListener("click", () =>
+    applyZoom(1, dims.canvasW / 2, dims.canvasH / 2),
+  );
+document
+  .getElementById("btn-zoom-out")
+  .addEventListener("click", () =>
+    applyZoom(-1, dims.canvasW / 2, dims.canvasH / 2),
+  );
+document
+  .getElementById("btn-zoom-reset")
+  .addEventListener("click", resetCamera);
+
+document.getElementById("btn-undo").addEventListener("click", () => {
+  if (undo(grid)) {
+    refreshHistoryButtons();
+    showToast("Undo");
+  }
+});
+document.getElementById("btn-redo").addEventListener("click", () => {
+  if (redo(grid)) {
+    refreshHistoryButtons();
+    showToast("Redo");
+  }
+});
+
 document.getElementById("btn-clear").addEventListener("click", () => {
   if (!confirm("Clear the entire map?")) return;
+  beginStroke();
   for (let gy = 0; gy < ROWS; gy++)
-    for (let gx = 0; gx < COLS; gx++) grid[gy][gx] = "empty";
+    for (let gx = 0; gx < COLS; gx++) {
+      recordCell(grid, gx, gy, "empty");
+      grid[gy][gx] = "empty";
+    }
+  commitStroke();
+  refreshHistoryButtons();
   showToast("Map cleared");
 });
 
-// ── UI: Export modal ──────────────────────────────────────────────────────────
 document.getElementById("btn-export").addEventListener("click", () => {
   document.getElementById("export-text").value = gridToSave();
   document.getElementById("modal-export").classList.add("open");
 });
-document.getElementById("btn-export-close").addEventListener("click", () => {
-  document.getElementById("modal-export").classList.remove("open");
-});
+document
+  .getElementById("btn-export-close")
+  .addEventListener("click", () =>
+    document.getElementById("modal-export").classList.remove("open"),
+  );
 document.getElementById("btn-copy-save").addEventListener("click", () => {
   const ta = document.getElementById("export-text");
   ta.select();
@@ -249,14 +372,15 @@ document.getElementById("btn-copy-save").addEventListener("click", () => {
     .catch(() => showToast("Select all and copy manually"));
 });
 
-// ── UI: Import modal ──────────────────────────────────────────────────────────
 document.getElementById("btn-import").addEventListener("click", () => {
   document.getElementById("import-text").value = "";
   document.getElementById("modal-import").classList.add("open");
 });
-document.getElementById("btn-import-close").addEventListener("click", () => {
-  document.getElementById("modal-import").classList.remove("open");
-});
+document
+  .getElementById("btn-import-close")
+  .addEventListener("click", () =>
+    document.getElementById("modal-import").classList.remove("open"),
+  );
 document.getElementById("btn-do-import").addEventListener("click", () => {
   const str = document.getElementById("import-text").value.trim();
   if (loadFromSave(str)) {
@@ -267,32 +391,27 @@ document.getElementById("btn-do-import").addEventListener("click", () => {
   }
 });
 
-// Close modals on backdrop click
-document.querySelectorAll(".modal-bg").forEach((bg) => {
+document.querySelectorAll(".modal-bg").forEach((bg) =>
   bg.addEventListener("click", (e) => {
     if (e.target === bg) bg.classList.remove("open");
-  });
-});
+  }),
+);
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function showToast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg;
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2200);
+  setTimeout(() => t.classList.remove("show"), 2000);
 }
+
+// ── Init UI state ─────────────────────────────────────────────────────────────
+updateZoomLabel();
+refreshHistoryButtons();
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
 function loop() {
-  drawGrid(
-    ctx,
-    grid,
-    hovered,
-    dims.offsetX,
-    dims.offsetY,
-    dims.canvasW,
-    dims.canvasH,
-  );
+  drawGrid(ctx, grid, hovered, dims);
   requestAnimationFrame(loop);
 }
 loop();

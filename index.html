@@ -14,10 +14,58 @@
     <body>
         <header>
             <div class="logo">Tile<span>Town</span></div>
+
             <div class="header-actions">
+                <!-- Undo / Redo -->
+                <button
+                    class="btn icon-btn"
+                    id="btn-undo"
+                    title="Undo (Ctrl+Z)"
+                    disabled
+                >
+                    ↩ UNDO
+                </button>
+                <button
+                    class="btn icon-btn"
+                    id="btn-redo"
+                    title="Redo (Ctrl+Y)"
+                    disabled
+                >
+                    ↪ REDO
+                </button>
+
+                <div class="sep"></div>
+
+                <!-- Zoom -->
+                <button
+                    class="btn icon-btn"
+                    id="btn-zoom-out"
+                    title="Zoom out (-)"
+                >
+                    −
+                </button>
+                <span id="zoom-label" class="zoom-label">100%</span>
+                <button
+                    class="btn icon-btn"
+                    id="btn-zoom-in"
+                    title="Zoom in (+)"
+                >
+                    +
+                </button>
+                <button
+                    class="btn icon-btn"
+                    id="btn-zoom-reset"
+                    title="Reset view (Ctrl+0)"
+                >
+                    FIT
+                </button>
+
+                <div class="sep"></div>
+
+                <!-- Save / load -->
                 <button class="btn danger" id="btn-clear">CLEAR</button>
-                <button class="btn primary" id="btn-export">EXPORT SAVE</button>
-                <button class="btn" id="btn-import">IMPORT SAVE</button>
+                <button class="btn primary" id="btn-export">EXPORT</button>
+                <button class="btn" id="btn-import">IMPORT</button>
             </div>
         </header>
 
@@ -45,12 +93,24 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="info-panel">
+                    <div class="panel-label">Controls</div>
+                    <div class="controls-list">
+                        <div>Scroll — zoom</div>
+                        <div>Mid-drag — pan</div>
+                        <div>Space+drag — pan</div>
+                        <div>Shift+paint — erase</div>
+                        <div>Ctrl+Z / Y — undo/redo</div>
+                    </div>
+                </div>
             </div>
 
             <div class="canvas-wrap">
                 <canvas id="gameCanvas"></canvas>
                 <div class="canvas-hint">
-                    CLICK OR DRAG TO PAINT &nbsp;·&nbsp; HOLD SHIFT TO ERASE
+                    CLICK/DRAG PAINT &nbsp;·&nbsp; SHIFT ERASE &nbsp;·&nbsp;
+                    SCROLL ZOOM &nbsp;·&nbsp; MOUSE LEFT OR SPACE + DRAG PAN
                 </div>
             </div>
         </div>
@@ -60,9 +120,8 @@
             <div class="modal">
                 <h3>EXPORT SAVE</h3>
                 <p>
-                    Copy this save code and keep it somewhere safe — a text
-                    file, note, or message. Use "Import Save" to restore your
-                    map in any session.
+                    Copy this save code and keep it somewhere safe. Use "Import"
+                    to restore your map in any session.
                 </p>
                 <textarea id="export-text" readonly></textarea>
                 <div class="modal-actions">
