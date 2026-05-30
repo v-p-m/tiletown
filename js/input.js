@@ -1,7 +1,7 @@
 // input.js
 // Mouse, touch, and keyboard input — including zoom/pan and paint.
 
-import { COLS, ROWS, TW, TH } from "./game.js";
+import { COLS, ROWS, TW, TH } from "./constants.js";
 
 export function isValid(gx, gy) {
   return gx >= 0 && gx < COLS && gy >= 0 && gy < ROWS;
@@ -35,7 +35,7 @@ export function worldToGrid(wx, wy) {
  * The renderer draws the grid with:
  *   ctx.setTransform(zoom, 0, 0, zoom, panX, panY)
  * and tile origins at (baseX + iso_offset, baseY + iso_offset)
- * where baseX = canvasW/2, baseY = 40.
+ * where baseX = canvasW/2, baseY = 20.
  * To invert: canvas px → un-camera → subtract base origin → isometric inverse.
  */
 export function eventToGrid(e, canvas, dims) {
@@ -52,7 +52,7 @@ export function eventToGrid(e, canvas, dims) {
 
   // 2. Subtract base grid origin (must match renderer's baseX/baseY)
   const baseX = dims.canvasW / 2;
-  const baseY = 40;
+  const baseY = 20;
   const rx = wx - baseX;
   const ry = wy - baseY;
 

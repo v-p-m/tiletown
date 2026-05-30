@@ -6,6 +6,7 @@ An isometric grid-based city painter built with vanilla JavaScript and HTML5 Can
 
 ```
 tiletown/
+tiletown/
 ├── index.html    ← Entry point, HTML structure, modals
 ├── css/
 │   └── style.css     ← All styles and layout
@@ -18,6 +19,16 @@ tiletown/
 ## Run locally
 
 Just open `index.html` in any modern browser. No build step, no dependencies.
+
+## Deploy to GitHub Pages
+
+1. Create a new repo on GitHub (e.g. `tiletown`)
+2. Push all 5 files to the `main` branch
+3. Go to **Settings → Pages → Source** → set branch to `main`, folder to `/ (root)`
+4. Your game will be live at:
+   `https://yourusername.github.io/tiletown`
+
+> Note: The files use ES modules (`type="module"`), so they must be served over HTTP — opening `index.html` directly from disk works in most browsers but not all. GitHub Pages always serves over HTTP so it works perfectly there.
 
 ## Controls
 
