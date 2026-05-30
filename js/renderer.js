@@ -1,5 +1,6 @@
 // renderer.js
-// All canvas drawing with camera (zoom + pan) support.
+// Draws the isometric grid with camera transform and viewport culling.
+// Only tiles visible within the current canvas viewport are drawn.
 
 import { ZONE_MAP, COLS, ROWS, TW, TH, WALL } from "./game.js";
 
@@ -10,11 +11,7 @@ export const HOVER_COLOR = {
   wall: true,
 };
 
-/**
- * Grid cell → world-space screen position (before camera transform).
- * The camera transform is applied via ctx.setTransform, so this just
- * returns the untransformed isometric position.
- */
+/** Grid cell → world position (before camera). */
 export function gridToWorld(gx, gy, baseX, baseY) {
   return {
     x: baseX + (gx - gy) * (TW / 2),
@@ -22,12 +19,10 @@ export function gridToWorld(gx, gy, baseX, baseY) {
   };
 }
 
-/**
- * Draw one isometric tile at world coords (sx, sy).
- */
-export function drawTile(ctx, sx, sy, color) {
-  const hw = TW / 2;
-  const hh = TH / 2;
+/** Draw one isometric tile. */
+function drawTile(ctx, sx, sy, color) {
+  const hw = TW / 2,
+    hh = TH / 2;
 
   ctx.beginPath();
   ctx.moveTo(sx, sy);
@@ -37,7 +32,7 @@ export function drawTile(ctx, sx, sy, color) {
   ctx.closePath();
   ctx.fillStyle = color.top;
   ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.3)";
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
   ctx.lineWidth = 0.5;
   ctx.stroke();
 
@@ -65,24 +60,82 @@ export function drawTile(ctx, sx, sy, color) {
 }
 
 /**
- * Draw the full grid, applying the camera transform.
+ * Compute the visible grid cell range given the current camera.
+ * We invert the camera transform to find which world coords map to the
+ * canvas corners, then clamp to grid bounds.
+ *
+ * Isometric inverse (world → grid):
+ *   wx = baseX + (gx - gy) * TW/2  →  gx - gy = (wx - baseX) / (TW/2)
+ *   wy = baseY + (gx + gy) * TH/2  →  gx + gy = (wy - baseY) / (TH/2)
+ *   gx = ((gx-gy) + (gx+gy)) / 2
+ *   gy = ((gx+gy) - (gx-gy)) / 2
  */
+function getVisibleRange(canvasW, canvasH, camera, baseX, baseY) {
+  // Canvas corners in world space
+  const corners = [
+    [0, 0],
+    [canvasW, 0],
+    [0, canvasH],
+    [canvasW, canvasH],
+  ].map(([px, py]) => ({
+    wx: (px - camera.panX) / camera.zoom,
+    wy: (py - camera.panY) / camera.zoom,
+  }));
+
+  let minGx = Infinity,
+    maxGx = -Infinity;
+  let minGy = Infinity,
+    maxGy = -Infinity;
+
+  for (const { wx, wy } of corners) {
+    const rx = wx - baseX,
+      ry = wy - baseY;
+    const sum = ry / (TH / 2);
+    const diff = rx / (TW / 2);
+    const gx = (sum + diff) / 2;
+    const gy = (sum - diff) / 2;
+    minGx = Math.min(minGx, gx);
+    maxGx = Math.max(maxGx, gx);
+    minGy = Math.min(minGy, gy);
+    maxGy = Math.max(maxGy, gy);
+  }
+
+  // Add padding of 2 tiles so edges don't pop in/out
+  const pad = 2;
+  return {
+    gxMin: Math.max(0, Math.floor(minGx) - pad),
+    gxMax: Math.min(COLS - 1, Math.ceil(maxGx) + pad),
+    gyMin: Math.max(0, Math.floor(minGy) - pad),
+    gyMax: Math.min(ROWS - 1, Math.ceil(maxGy) + pad),
+  };
+}
+
+/** Draw the visible portion of the grid. */
 export function drawGrid(ctx, grid, hovered, dims) {
   const { canvasW, canvasH, camera } = dims;
-  // Base world origin (grid centre before camera)
   const baseX = canvasW / 2;
-  const baseY = 40;
+  const baseY = 20;
 
   // Clear
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#0a0a10";
   ctx.fillRect(0, 0, canvasW, canvasH);
 
-  // Apply camera: pan then zoom around (0,0)
+  // Apply camera
   ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.panX, camera.panY);
 
-  for (let gy = 0; gy < ROWS; gy++) {
-    for (let gx = 0; gx < COLS; gx++) {
+  // Cull to visible range
+  const { gxMin, gxMax, gyMin, gyMax } = getVisibleRange(
+    canvasW,
+    canvasH,
+    camera,
+    baseX,
+    baseY,
+  );
+
+  // Draw painter's order: top-left → bottom-right in iso space (gy then gx)
+  for (let gy = gyMin; gy <= gyMax; gy++) {
+    for (let gx = gxMin; gx <= gxMax; gx++) {
       const isHov = hovered && hovered.x === gx && hovered.y === gy;
       const color = isHov ? HOVER_COLOR : ZONE_MAP[grid[gy][gx]];
       const { x, y } = gridToWorld(gx, gy, baseX, baseY);
@@ -90,6 +143,5 @@ export function drawGrid(ctx, grid, hovered, dims) {
     }
   }
 
-  // Reset transform for any HUD drawing
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }

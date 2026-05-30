@@ -85,6 +85,14 @@ header {
     border-color: var(--danger);
     color: var(--danger);
 }
+.btn.generate {
+    border-color: var(--success);
+    color: var(--success);
+}
+.btn.generate:hover {
+    background: var(--success);
+    color: #000;
+}
 .btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
@@ -122,9 +130,9 @@ header {
     display: flex;
     flex: 1;
     width: 100%;
-    max-width: 1200px;
+    max-width: 1400px;
     gap: 0;
-    padding: 20px 16px;
+    padding: 16px;
     align-items: flex-start;
 }
 
